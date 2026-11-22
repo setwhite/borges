@@ -19,6 +19,9 @@ check-deadcode:
     pnpm exec knip
     cd workers/parser && uv run vulture src
 
+parser-serve:
+    cd workers/parser && uv run python -m borges_parser.app
+
 db-up:
     docker compose up -d db
 

@@ -1,6 +1,6 @@
 # todo-02 本地 FastAPI 解析服务（PDF 与音频）
 
-- [ ] 未开始
+- [x] 已完成
 - Spec: docs/specs/phase1-core.md
 - 验收: AC2
 
