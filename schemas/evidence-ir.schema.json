@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://borges.local/schemas/evidence-ir.schema.json",
+  "title": "EvidenceIR",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["documentMeta", "segments"],
+  "properties": {
+    "documentMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "mediaType", "contentHash", "parserEngine"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "mediaType": { "type": "string", "minLength": 1 },
+        "contentHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "parserEngine": { "type": "string", "minLength": 1 }
+      }
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "anchor"],
+        "properties": {
+          "text": { "type": "string", "minLength": 1 },
+          "attachments": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "anchor": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "pageNumber", "sectionPath"],
+                "properties": {
+                  "kind": { "const": "page" },
+                  "pageNumber": { "type": "integer", "minimum": 1 },
+                  "sectionPath": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "startMs", "endMs"],
+                "properties": {
+                  "kind": { "const": "time" },
+                  "startMs": { "type": "integer", "minimum": 0 },
+                  "endMs": { "type": "integer", "minimum": 1 },
+                  "speaker": { "type": "string", "minLength": 1 }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "filePath", "startLine", "endLine"],
+                "properties": {
+                  "kind": { "const": "line" },
+                  "filePath": { "type": "string", "minLength": 1 },
+                  "startLine": { "type": "integer", "minimum": 1 },
+                  "endLine": { "type": "integer", "minimum": 1 }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

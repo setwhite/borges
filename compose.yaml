@@ -1,0 +1,20 @@
+services:
+  db:
+    image: paradedb/paradedb:latest
+    container_name: borges-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: borges
+      POSTGRES_PASSWORD: borges
+      POSTGRES_DB: borges
+    volumes:
+      - borges_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U borges -d borges"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  borges_pgdata:

@@ -1,0 +1,21 @@
+{
+  "name": "borges",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "arch:check": "depcruise apps/server/src --config .dependency-cruiser.cjs",
+    "test": "pnpm --filter @borges/server test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "dependency-cruiser": "^16.8.0",
+    "knip": "^5.39.0",
+    "typescript": "^5.7.2"
+  }
+}
