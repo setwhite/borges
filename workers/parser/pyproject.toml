@@ -2,6 +2,7 @@
 name = "borges-parser"
 version = "0.1.0"
 description = "Local stateless multimodal parser worker for Borges"
+license = "AGPL-3.0-only"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115.0",
