@@ -537,3 +537,4 @@ function withDocumentIdentity(
 }
 
 export type { ParserWorker } from "./parserWorker.js";
+export { defaultMirrorRoot } from "./mirror.js";

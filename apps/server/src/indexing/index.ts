@@ -278,6 +278,7 @@ function requireEmbedding(vectors: number[][], index: number): number[] {
 export { chunkEvidence } from "./chunker.js";
 export type { ChunkDraft, ChunkerOptions } from "./chunker.js";
 export {
+  createDefaultEmbeddingProvider,
   createOpenAiEmbeddingProvider,
   createOpenAiHyperedgeExtractor,
   EMBEDDING_DIMENSIONS,

@@ -1,6 +1,6 @@
 # todo-04 三模式检索引擎（Hybrid、动态超边与 rg）
 
-- [ ] 未开始
+- [x] 已完成
 - Spec: docs/specs/phase1-core.md
 - 验收: AC5
 
