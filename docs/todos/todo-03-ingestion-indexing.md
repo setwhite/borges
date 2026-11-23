@@ -1,6 +1,6 @@
 # todo-03 入库状态机与索引管线
 
-- [ ] 未开始
+- [x] 已完成
 - Spec: docs/specs/phase1-core.md
 - 验收: AC3、AC4
 
