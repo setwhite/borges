@@ -529,6 +529,74 @@ describe("IngestionSeam", () => {
     expect(await countEventEntities(sourceId)).toBe(0);
   });
 
+  it("lists sources with the same tenant and acl filtering rules as retrieval", async () => {
+    const publicSourceId = await createSource(false);
+    const financeSourceId = randomUUID();
+    const legalSourceId = randomUUID();
+    const otherTenantSourceId = randomUUID();
+    await db.insert(sources).values([
+      {
+        id: financeSourceId,
+        name: "finance",
+        tenantId: "acme",
+        acl: ["finance"],
+      },
+      {
+        id: legalSourceId,
+        name: "legal",
+        tenantId: "acme",
+        acl: ["legal"],
+      },
+      {
+        id: otherTenantSourceId,
+        name: "other",
+        tenantId: "other",
+        acl: ["finance"],
+      },
+    ]);
+    createdSourceIds.push(financeSourceId, legalSourceId, otherTenantSourceId);
+    const service = createService();
+    const created = new Set([
+      publicSourceId,
+      financeSourceId,
+      legalSourceId,
+      otherTenantSourceId,
+    ]);
+    const visibleIds = async (filter?: {
+      tenantId?: string;
+      aclTags?: string[];
+    }) =>
+      (await service.listSources(filter))
+        .map((source) => source.sourceId)
+        .filter((sourceId) => created.has(sourceId))
+        .sort();
+
+    expect(await visibleIds()).toEqual([publicSourceId]);
+    expect(
+      await visibleIds({ tenantId: "acme", aclTags: ["finance"] }),
+    ).toEqual([financeSourceId]);
+    // An empty tag list keeps retrieval's public-only rule: acl-protected
+    // sources stay hidden until the caller presents a matching tag.
+    expect(await visibleIds({ tenantId: "acme" })).toEqual([]);
+    expect(
+      await visibleIds({ tenantId: "other", aclTags: ["finance"] }),
+    ).toEqual([otherTenantSourceId]);
+    expect(await visibleIds({ tenantId: "missing" })).toEqual([]);
+
+    const [finance] = await service.listSources({
+      tenantId: "acme",
+      aclTags: ["finance"],
+    });
+    expect(finance).toMatchObject({
+      sourceId: financeSourceId,
+      name: "finance",
+      tenantId: "acme",
+      aclTags: ["finance"],
+      extractHyperedge: false,
+    });
+    expect(Number.isNaN(Date.parse(finance?.createdAt ?? ""))).toBe(false);
+  });
+
   it("deletes database rows and the sandbox mirror file", async () => {
     const sourceId = await createSource(false);
     const directory = await createCaseDirectory();

@@ -95,6 +95,7 @@ export function createRetrievalService(
 
 export interface DefaultRetrievalDependencies {
   db: DbClient;
+  reranker?: Reranker;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -105,7 +106,7 @@ export function createDefaultRetrievalService(
   return createRetrievalService({
     db: dependencies.db,
     embeddingProvider: createDefaultEmbeddingProvider(env),
-    reranker: createDefaultReranker(env),
+    reranker: dependencies.reranker ?? createDefaultReranker(env),
     mirrorRoot: defaultMirrorRoot(env),
     rgTimeoutMs: timeoutFromEnv(env.RG_TIMEOUT_MS, DEFAULT_RG_TIMEOUT_MS),
   });
@@ -183,4 +184,4 @@ export type {
   RerankScore,
   Reranker,
 } from "./reranker.js";
-export { createOpenAiReranker } from "./reranker.js";
+export { createDefaultReranker, createOpenAiReranker } from "./reranker.js";

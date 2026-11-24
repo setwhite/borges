@@ -2,7 +2,12 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "workspaces": {
     "apps/server": {
-      "entry": ["src/*/index.ts", "src/storage/schema.ts", "drizzle.config.ts"],
+      "entry": [
+        "src/*/index.ts",
+        "src/storage/schema.ts",
+        "src/interfaces/*/bin.ts",
+        "drizzle.config.ts"
+      ],
       "project": ["src/**/*.ts", "tests/**/*.ts"]
     }
   }

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import path from "node:path";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { type SQL, and, eq, inArray, sql } from "drizzle-orm";
 import type { EvidenceIR } from "../contracts/evidence-ir.js";
 import {
   type DocumentIndexer,
@@ -22,6 +22,7 @@ import {
   readDirectTextEvidence,
   resolveSourceFormat,
 } from "./directText.js";
+import { IngestionError } from "./errors.js";
 import { IngestionFailure, toIngestionFailure } from "./failures.js";
 import {
   defaultMirrorRoot,
@@ -58,10 +59,25 @@ export interface IngestionJobView {
   errorMessage: string | null;
 }
 
+export interface SourceFilter {
+  tenantId?: string;
+  aclTags?: string[];
+}
+
+export interface SourceView {
+  sourceId: string;
+  name: string;
+  tenantId: string;
+  aclTags: string[];
+  extractHyperedge: boolean;
+  createdAt: string;
+}
+
 export interface IngestionSeam {
   submitDocument(input: SubmitDocumentInput): Promise<IngestionJobView>;
   getJob(jobId: string): Promise<IngestionJobView | null>;
   deleteDocument(documentId: string): Promise<void>;
+  listSources(filter?: SourceFilter): Promise<SourceView[]>;
 }
 
 export interface IngestionDependencies {
@@ -69,6 +85,7 @@ export interface IngestionDependencies {
   parser?: ParserWorker;
   indexer?: DocumentIndexer;
   mirrorRoot?: string;
+  env?: NodeJS.ProcessEnv;
 }
 
 type QueryExecutor = DbClient | DbTransaction;
@@ -91,14 +108,16 @@ const JOB_TRANSITIONS: Record<
 };
 
 const MAX_ERROR_MESSAGE_LENGTH = 2000;
+const DEFAULT_TENANT_ID = "default";
 
 export function createIngestionService(
   dependencies: IngestionDependencies,
 ): IngestionSeam {
   const { db } = dependencies;
-  const parser = dependencies.parser ?? createDefaultParserWorkerClient();
-  const indexer = dependencies.indexer ?? createDefaultDocumentIndexer();
-  const mirrorRoot = dependencies.mirrorRoot ?? defaultMirrorRoot();
+  const env = dependencies.env ?? process.env;
+  const parser = dependencies.parser ?? createDefaultParserWorkerClient(env);
+  const indexer = dependencies.indexer ?? createLazyDocumentIndexer(env);
+  const mirrorRoot = dependencies.mirrorRoot ?? defaultMirrorRoot(env);
 
   async function submitDocument(
     input: SubmitDocumentInput,
@@ -113,7 +132,10 @@ export function createIngestionService(
       .where(eq(sources.id, input.sourceId))
       .limit(1);
     if (!source) {
-      throw new Error(`source not found: ${input.sourceId}`);
+      throw new IngestionError(
+        "source_not_found",
+        `source not found: ${input.sourceId}`,
+      );
     }
     const title = input.title ?? path.basename(input.filePath);
     const tenantId = input.tenantId ?? source.tenantId;
@@ -209,6 +231,32 @@ export function createIngestionService(
 
   async function getJob(jobId: string): Promise<IngestionJobView | null> {
     return readJob(db, jobId);
+  }
+
+  async function listSources(filter: SourceFilter = {}): Promise<SourceView[]> {
+    const tenantId = filter.tenantId?.trim() || DEFAULT_TENANT_ID;
+    const aclTags = unique(filter.aclTags ?? []);
+    const rows = await db
+      .select({
+        sourceId: sources.id,
+        name: sources.name,
+        tenantId: sources.tenantId,
+        aclTags: sources.acl,
+        extractHyperedge: sources.extractHyperedge,
+        createdAt: sources.createdAt,
+      })
+      .from(sources)
+      .where(
+        and(
+          eq(sources.tenantId, tenantId),
+          sql`(${sources.acl} && ${textArrayLiteral(aclTags)} or cardinality(${sources.acl}) = 0)`,
+        ),
+      )
+      .orderBy(sources.createdAt, sources.id);
+    return rows.map((row) => ({
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+    }));
   }
 
   async function deleteDocument(documentId: string): Promise<void> {
@@ -390,7 +438,7 @@ export function createIngestionService(
     return job;
   }
 
-  return { submitDocument, getJob, deleteDocument };
+  return { submitDocument, getJob, deleteDocument, listSources };
 }
 
 async function readJob(
@@ -536,5 +584,31 @@ function withDocumentIdentity(
   };
 }
 
+function createLazyDocumentIndexer(env: NodeJS.ProcessEnv): DocumentIndexer {
+  let indexer: DocumentIndexer | null = null;
+  const resolve = (): DocumentIndexer => {
+    indexer ??= createDefaultDocumentIndexer(env);
+    return indexer;
+  };
+  return {
+    prepare: (input) => resolve().prepare(input),
+    persist: (tx, input) => resolve().persist(tx, input),
+  };
+}
+
+function textArrayLiteral(values: readonly string[]): SQL {
+  const items = sql.join(
+    values.map((value) => sql`${value}::text`),
+    sql`, `,
+  );
+  return sql`ARRAY[${items}]::text[]`;
+}
+
+function unique(values: readonly string[]): string[] {
+  return [...new Set(values)];
+}
+
+export { IngestionError } from "./errors.js";
+export type { IngestionErrorCode } from "./errors.js";
 export type { ParserWorker } from "./parserWorker.js";
 export { defaultMirrorRoot } from "./mirror.js";
