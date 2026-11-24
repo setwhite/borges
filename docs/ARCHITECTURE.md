@@ -19,11 +19,11 @@ Borges 是面向企业场景的多模态知识底座与智能体系统。系统�
   - 暴露统一 `search` 入口，按请求路由至 `hybrid`、`hyperedge` 或 `rg` 三种模式。
   - 在查询条件中强制注入 `tenant_id` 与 `acl` 预过滤。
   - 统一返回原始 `Chunk` 内容与定位锚点，任一召回路径报错时显式抛出异常。
-- `apps/server/src/agent/`（实现待 todo-05）
+- `apps/server/src/agent/`
   - 基于 [Pi SDK](https://pi.dev/docs/latest/sdk) 驱动多轮检索与分析循环。
   - 根据问题特征自主选择 `hybrid`、`hyperedge` 或 `rg` 工具并执行 Query 改写。
   - 校验回答中的每条 `Citation` 指向真实分块与锚点，证据不足时触发显式拒答。
-- `apps/server/src/interfaces/`（实现待 todo-05）
+- `apps/server/src/interfaces/`
   - 薄外壳层，包含 `http/`（Fastify + OpenAPI）、`mcp/`（MCP Server）与 `cli/`（Agent-First CLI）。
   - 只负责参数解析、协议转换与响应序列化，禁止绕过领域入口直连存储。
 - `apps/server/src/storage/`
@@ -45,7 +45,7 @@ Borges 是面向企业场景的多模态知识底座与智能体系统。系统�
 - 代码精确检索：`ripgrep`（通过 `execFile` 调用 `rg --json`，禁用 shell 拼接）。
 - 本地解析服务：Python 3.12+、FastAPI、Uvicorn、`pydantic` v2、`structlog`。
 - 解析插件与模型：OpenAI 兼容模型接口（LLM / Embedding / Rerank / VLM）；Phase 1 接入 MinerU API 与云端 ASR API；Phase 2 按需挂载 Docling、MarkItDown、`ffmpeg`、PySceneDetect、`imagehash` 及本地 FunASR / PaddleOCR。
-- 接口层与智能体依赖（Fastify、MCP SDK、`commander`、`pino`、Pi SDK）尚未安装，todo-05 接入。
+- 接口层与智能体依赖（Fastify、MCP SDK、`commander`、`pino`、Pi SDK）已接入；HTTP、MCP 与 CLI 只经 `InterfaceDependencies` 调用领域 Seam。
 
 ## 核心不变量
 
@@ -61,10 +61,10 @@ Borges 是面向企业场景的多模态知识底座与智能体系统。系统�
 测试只允许经以下公开边界验证行为，禁止 mock 内部协作者或绕过边界查库。
 
 - `ParserWorkerSeam`：本地 FastAPI 服务的 `GET /health` 与 `POST /parse` 接口。
-- `IngestionSeam`：`apps/server/src/ingestion/index.ts` 的 `createIngestionService()` 返回的 `submitDocument`、`getJob`、`deleteDocument`。
+- `IngestionSeam`：`apps/server/src/ingestion/index.ts` 的 `createIngestionService()` 返回的 `submitDocument`、`getJob`、`deleteDocument`、`listSources`。
 - `RetrievalSeam`：`apps/server/src/retrieval/index.ts` 的 `createRetrievalService()` 与 `createDefaultRetrievalService()` 返回的 `search`。
-- `AgentSeam`：`apps/server/src/agent/index.ts` 的 `ask`（todo-05 实现）。
-- `InterfaceSeam`：HTTP REST 端点、MCP 工具调用与 `borges` CLI 命令入口（todo-05 实现）。
+- `AgentSeam`：`apps/server/src/agent/index.ts` 的 `ask`。
+- `InterfaceSeam`：HTTP REST 端点、MCP 工具调用与 `borges` CLI 命令入口。
 
 ## Fitness Functions
 

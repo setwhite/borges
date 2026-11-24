@@ -10,7 +10,7 @@ Borges 是一个本地优先的多模态知识库。它把 PDF 与音频解析�
 - [x] [todo-02 解析服务](docs/todos/todo-02-parser-worker.md)：本地 FastAPI worker，MinerU PDF 与 DeepSeek ASR 两个插件
 - [x] [todo-03 入库与索引](docs/todos/todo-03-ingestion-indexing.md)：状态机、版本替换、分块与索引
 - [x] [todo-04 三模式检索](docs/todos/todo-04-tri-mode-retrieval.md)：hybrid / hyperedge / rg
-- [ ] [todo-05 Pi Agent 接口](docs/todos/todo-05-pi-agent-interfaces.md)：HTTP、MCP、CLI
+- [x] [todo-05 Pi Agent 接口](docs/todos/todo-05-pi-agent-interfaces.md)：HTTP、MCP、CLI
 
 验收标准见 [Phase 1 核心闭环规格](docs/specs/phase1-core.md)（AC1–AC7）。
 
@@ -45,15 +45,28 @@ curl -s -X POST http://127.0.0.1:8001/parse \
   -d '{"filePath":"C:/path/to/sample.pdf"}'
 ```
 
+## 接口
+
+构建后可分别启动 HTTP、MCP stdio 与 CLI，三者都只调用领域 Seam：
+
+```bash
+pnpm --filter @borges/server build
+node apps/server/dist/interfaces/http/bin.js              # 默认 127.0.0.1:3000，OpenAPI 见 /openapi.json
+node apps/server/dist/interfaces/mcp/bin.js               # MCP stdio
+node apps/server/dist/interfaces/cli/bin.js sources list  # 默认 JSON 信封
+node apps/server/dist/interfaces/cli/bin.js search --query revenue --source-id <uuid> --format text
+```
+
 ## 配置
 
 `cp .env.example .env` 后按文件内注释填写。最小可运行需要：
 
 - `DATABASE_URL`：ParadeDB 连接串，默认指向 `just db-up` 起的容器。
 - `EMBEDDING_API_KEY` / `EMBEDDING_BASE_URL` / `EMBEDDING_MODEL`：入库与检索共用，三项必填，缺项在构造时抛错。
-- `RERANK_API_KEY` / `RERANK_BASE_URL` / `RERANK_MODEL`：`hybrid` 与 `hyperedge` 精排必填，构造检索引擎时统一校验，只用 `rg` 也不例外。
+- `RERANK_API_KEY` / `RERANK_BASE_URL` / `RERANK_MODEL`：`hybrid` 与 `hyperedge` 精排及智能体 `rg` 证据复核必填，构造检索/智能体服务时统一校验。
 - `MINERU_API_TOKEN`、`DEEPSEEK_API_KEY`：解析 worker 的两个上游凭据。
-- `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `LLM_MODEL`：仅当信源开启 `extract_hyperedge` 时调用。
+- `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `LLM_MODEL`：智能体对话必填；信源开启 `extract_hyperedge` 时超边抽取共用同一模型。
+- `AGENT_REFUSAL_THRESHOLD`：可选，最高相关性低于该值时智能体强制拒答，默认 `0.2`。
 
 ## 文档
 
