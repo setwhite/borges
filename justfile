@@ -19,6 +19,11 @@ check-deadcode:
     pnpm exec knip
     cd workers/parser && uv run vulture src
 
+smoke-e2e:
+    pnpm --filter @borges/server run build
+    pnpm --filter @borges/server exec tsc -p tsconfig.smoke.json
+    pnpm --filter @borges/server exec node dist/smoke/scripts/smoke-e2e.js
+
 parser-serve:
     cd workers/parser && uv run python -m borges_parser.app
 

@@ -6,6 +6,7 @@
         "src/*/index.ts",
         "src/storage/schema.ts",
         "src/interfaces/*/bin.ts",
+        "scripts/*.ts",
         "drizzle.config.ts"
       ],
       "project": ["src/**/*.ts", "tests/**/*.ts"]
