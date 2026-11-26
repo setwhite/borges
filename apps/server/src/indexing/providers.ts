@@ -47,6 +47,8 @@ export interface OpenAiHyperedgeConfig {
   fetchImpl?: typeof fetch;
 }
 
+const EMBEDDING_BATCH_SIZE = 10;
+
 const EmbeddingResponseSchema = z.object({
   data: z
     .array(
@@ -102,53 +104,69 @@ export function createOpenAiEmbeddingProvider(
   const endpoint = `${trimTrailingSlash(config.baseUrl)}/embeddings`;
   const timeoutMs = config.timeoutMs ?? 30_000;
   const fetchImpl = config.fetchImpl ?? fetch;
+  const requestBatch = async (texts: string[]): Promise<number[][]> => {
+    const response = await fetchImpl(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        input: texts,
+        dimensions: EMBEDDING_DIMENSIONS,
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) {
+      throw new Error(
+        `embedding request failed with status ${response.status}${await responseDetail(response)}`,
+      );
+    }
+    const payload = EmbeddingResponseSchema.parse(await response.json());
+    if (payload.data.length !== texts.length) {
+      throw new Error(
+        `embedding response count mismatch: expected ${texts.length}, received ${payload.data.length}`,
+      );
+    }
+    return [...payload.data]
+      .sort((left, right) => left.index - right.index)
+      .map((item, position) => {
+        if (item.index !== position) {
+          throw new Error(
+            `embedding response index mismatch at position ${position}: received ${item.index}`,
+          );
+        }
+        if (item.embedding.length !== EMBEDDING_DIMENSIONS) {
+          throw new Error(
+            `embedding dimension mismatch at position ${position}: expected ${EMBEDDING_DIMENSIONS}, received ${item.embedding.length}`,
+          );
+        }
+        for (const value of item.embedding) {
+          if (!Number.isFinite(value)) {
+            throw new Error(
+              `embedding vector at position ${position} contains a non-finite value`,
+            );
+          }
+        }
+        return item.embedding;
+      });
+  };
   return {
     embed: async (texts) => {
-      if (texts.length === 0) {
-        return [];
-      }
-      const response = await fetchImpl(endpoint, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${config.apiKey}`,
-        },
-        body: JSON.stringify({ model: config.model, input: texts }),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      if (!response.ok) {
-        throw new Error(
-          `embedding request failed with status ${response.status}${await responseDetail(response)}`,
+      const vectors: number[][] = [];
+      for (
+        let offset = 0;
+        offset < texts.length;
+        offset += EMBEDDING_BATCH_SIZE
+      ) {
+        vectors.push(
+          ...(await requestBatch(
+            texts.slice(offset, offset + EMBEDDING_BATCH_SIZE),
+          )),
         );
       }
-      const payload = EmbeddingResponseSchema.parse(await response.json());
-      if (payload.data.length !== texts.length) {
-        throw new Error(
-          `embedding response count mismatch: expected ${texts.length}, received ${payload.data.length}`,
-        );
-      }
-      return [...payload.data]
-        .sort((left, right) => left.index - right.index)
-        .map((item, position) => {
-          if (item.index !== position) {
-            throw new Error(
-              `embedding response index mismatch at position ${position}: received ${item.index}`,
-            );
-          }
-          if (item.embedding.length !== EMBEDDING_DIMENSIONS) {
-            throw new Error(
-              `embedding dimension mismatch at position ${position}: expected ${EMBEDDING_DIMENSIONS}, received ${item.embedding.length}`,
-            );
-          }
-          for (const value of item.embedding) {
-            if (!Number.isFinite(value)) {
-              throw new Error(
-                `embedding vector at position ${position} contains a non-finite value`,
-              );
-            }
-          }
-          return item.embedding;
-        });
+      return vectors;
     },
   };
 }

@@ -41,7 +41,7 @@ const RerankResponseSchema = z.object({
 });
 
 export function createOpenAiReranker(config: OpenAiRerankConfig): Reranker {
-  const endpoint = `${trimTrailingSlash(config.baseUrl)}/rerank`;
+  const endpoint = resolveRerankEndpoint(config.baseUrl);
   const timeoutMs = config.timeoutMs ?? 30_000;
   const fetchImpl = config.fetchImpl ?? fetch;
   return {
@@ -181,6 +181,11 @@ async function request<T>(
       { cause: error },
     );
   }
+}
+
+function resolveRerankEndpoint(baseUrl: string): string {
+  const trimmed = trimTrailingSlash(baseUrl);
+  return /\/reranks?$/.test(trimmed) ? trimmed : `${trimmed}/rerank`;
 }
 
 function trimTrailingSlash(value: string): string {

@@ -46,7 +46,39 @@ describe("createOpenAiEmbeddingProvider", () => {
     expect(requests[0]?.body).toEqual({
       model: "embedding-model",
       input: ["hello"],
+      dimensions: EMBEDDING_DIMENSIONS,
     });
+  });
+
+  it("splits requests into batches of at most 10 texts", async () => {
+    const batches: string[][] = [];
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { input: string[] };
+      batches.push(body.input);
+      return new Response(
+        JSON.stringify({
+          data: body.input.map((_, index) => ({
+            index,
+            embedding: Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0.5),
+          })),
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    };
+    const provider = createOpenAiEmbeddingProvider({
+      baseUrl: "https://embedding.example/v1",
+      apiKey: "test-key",
+      model: "embedding-model",
+      fetchImpl,
+    });
+
+    const texts = Array.from({ length: 23 }, (_, index) => `text-${index}`);
+    const vectors = await provider.embed(texts);
+
+    expect(batches.map((batch) => batch.length)).toEqual([10, 10, 3]);
+    expect(vectors).toHaveLength(23);
+    expect(batches[0]?.[0]).toBe("text-0");
+    expect(batches[2]?.[2]).toBe("text-22");
   });
 
   it("fails fast when the returned dimension is not 1536", async () => {
