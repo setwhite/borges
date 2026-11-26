@@ -557,13 +557,24 @@ describe("RetrievalSeam", () => {
     }
   });
 
-  it("surfaces a bm25 failure instead of returning an empty list", async () => {
+  it("matches a hybrid query that contains code and log punctuation", async () => {
     const corpus = await seedCorpus();
 
-    await expectRetrievalError(
-      corpus.search({ mode: "hybrid", query: "(", topK: 5 }),
-      { code: "bm25_failed", mode: "hybrid" },
-    );
+    const hits = await corpus.search({
+      mode: "hybrid",
+      query: "orionRetryBudget(): number [0]",
+      topK: 5,
+    });
+
+    expect(hits.map((hit) => hit.content)).toContain(CODE_ONE_TEXT);
+  });
+
+  it("keeps hybrid search working when the query is only query syntax characters", async () => {
+    const corpus = await seedCorpus();
+
+    const hits = await corpus.search({ mode: "hybrid", query: "(", topK: 5 });
+
+    expect(hits.every((hit) => hit.score === 0)).toBe(true);
   });
 
   it("surfaces an embedding failure instead of returning an empty list", async () => {

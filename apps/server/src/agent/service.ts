@@ -5,6 +5,7 @@ import {
 } from "@earendil-works/pi-agent-core";
 import type { Api, AssistantMessage, Model } from "@earendil-works/pi-ai";
 import {
+  type RerankScore,
   type Reranker,
   type RetrievalSeam,
   type SearchHit,
@@ -177,11 +178,20 @@ async function rerankRgHits(
     return null;
   }
   const entries = [...hits.values()];
-  const results = await reranker.rerank({
-    mode: "rg",
-    query,
-    documents: entries.map((hit) => hit.content),
-  });
+  let results: RerankScore[];
+  try {
+    results = await reranker.rerank({
+      mode: "rg",
+      query,
+      documents: entries.map((hit) => hit.content),
+    });
+  } catch (error) {
+    throw new AgentError(
+      "rerank_failed",
+      `rg evidence rerank failed: ${errorMessage(error)}`,
+      { cause: error },
+    );
+  }
   const scores = new Map<string, number>();
   for (const result of results) {
     const hit = entries[result.index];
@@ -293,4 +303,8 @@ function parseThreshold(value: string): number {
   const parsed = Number(value);
   assertThreshold(parsed);
   return parsed;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

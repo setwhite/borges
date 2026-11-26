@@ -12,8 +12,10 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
+  AgentError,
   type AgentSeam,
   createAgentService,
+  createDefaultAgentService,
   createOpenAiCompatibleRuntime,
 } from "../src/agent/index.js";
 import {
@@ -26,6 +28,7 @@ import {
   type RerankInput,
   type RerankScore,
   type Reranker,
+  RetrievalError,
   type RetrievalSeam,
   type SearchHit,
   createRetrievalService,
@@ -416,6 +419,80 @@ describe("AgentSeam", () => {
 
     expect(response.refused).toBe(true);
     expect(response.citations).toEqual([]);
+  });
+
+  it("wraps an rg rerank failure in an AgentError while keeping the upstream cause", async () => {
+    const hit: SearchHit = {
+      chunkId: "55555555-5555-4555-8555-555555555555",
+      documentId: "66666666-6666-4666-8666-666666666666",
+      sourceId: "77777777-7777-4777-8777-777777777777",
+      content: "export const capitalGainsRate = 0.2;",
+      score: 1,
+      anchor: { kind: "line", filePath: "tax.ts", startLine: 1, endLine: 1 },
+    };
+    const retrieval: RetrievalSeam = {
+      search: async (request) => (request.mode === "rg" ? [hit] : []),
+    };
+    const reranker: Reranker = {
+      rerank: async () => {
+        throw new RetrievalError("rerank_timeout", "rg", "rerank timed out");
+      },
+    };
+    const { agent } = createScriptedAgent(
+      retrieval,
+      [
+        fauxAssistantMessage(fauxToolCall("search_rg", { query: "capital" })),
+        finalAnswer({
+          answer: "The capital gains rate is 0.2.",
+          citationChunkIds: [hit.chunkId],
+          refused: false,
+        }),
+      ],
+      reranker,
+    );
+
+    const error = await agent
+      .ask({
+        query: "What is the capital gains rate?",
+        sourceIds: [hit.sourceId],
+      })
+      .then(
+        () => {
+          throw new Error("expected ask to reject");
+        },
+        (rejected: unknown) => rejected,
+      );
+
+    expect(error).toBeInstanceOf(AgentError);
+    expect(error).toMatchObject({ code: "rerank_failed" });
+    expect((error as AgentError).cause).toMatchObject({
+      name: "RetrievalError",
+      code: "rerank_timeout",
+    });
+  });
+
+  it("rejects an AGENT_REFUSAL_THRESHOLD outside 0..1 when building the default service", () => {
+    let thrown: unknown;
+    try {
+      createDefaultAgentService({
+        retrieval: { search: async () => [] },
+        reranker: { rerank: async () => [] },
+        env: {
+          OPENAI_API_KEY: "test-key",
+          OPENAI_BASE_URL: "http://127.0.0.1:9/v1",
+          LLM_MODEL: "test-model",
+          AGENT_REFUSAL_THRESHOLD: "1.5",
+        },
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(AgentError);
+    expect(thrown).toMatchObject({
+      code: "model_config_invalid",
+      message: expect.stringContaining("refusalThreshold"),
+    });
   });
 
   it("keeps a model-declared refusal with empty citations", async () => {

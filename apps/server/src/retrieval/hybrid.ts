@@ -57,7 +57,7 @@ async function lexicalCandidates(
   const result = await input.db.execute<ChunkRow>(sql`
     select c.id as chunk_id, c.document_id, c.source_id, c.content, c.anchor
     from chunks c
-    where c.search_text @@@ ${input.query}
+    where c.search_text @@@ paradedb.match('search_text', ${input.query})
       and ${scopePredicate("c", input.scope)}
     order by paradedb.score(c.id) desc, c.id
     limit ${limit}

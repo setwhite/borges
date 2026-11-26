@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { and, eq, sql } from "drizzle-orm";
@@ -390,7 +390,7 @@ describe("IngestionSeam", () => {
     expect(await readFile(mirrorPath, "utf8")).toBe(v1Content);
   });
 
-  it("fails without throwing when the mirror root is not a directory", async () => {
+  it("normalizes a broken mirror root to mirror_write_failed and keeps the previous version", async () => {
     const sourceId = await createSource(true);
     const directory = await createCaseDirectory();
     const filePath = path.join(directory, "mirror-target.md");
@@ -404,7 +404,8 @@ describe("IngestionSeam", () => {
     }).submitDocument({ sourceId, filePath });
     expect(initialFailure.status).toBe("FAILED");
     expect(initialFailure.documentId).toBeNull();
-    expect(initialFailure.errorCode).toBeTruthy();
+    expect(initialFailure.errorCode).toBe("mirror_write_failed");
+    expect(initialFailure.errorMessage).toContain("mirror write failed");
     expect(await countDocuments(sourceId)).toBe(0);
 
     const first = await createService().submitDocument({ sourceId, filePath });
@@ -418,7 +419,8 @@ describe("IngestionSeam", () => {
     }).submitDocument({ sourceId, filePath });
     expect(updateFailure.status).toBe("FAILED");
     expect(updateFailure.documentId).toBeNull();
-    expect(updateFailure.errorCode).toBeTruthy();
+    expect(updateFailure.errorCode).toBe("mirror_write_failed");
+    expect(updateFailure.errorMessage).toContain("mirror write failed");
 
     const activeDocuments = await db
       .select({
@@ -452,6 +454,27 @@ describe("IngestionSeam", () => {
         "utf8",
       ),
     ).toBe(v1Content);
+  });
+
+  it("normalizes a failed mirror rename to mirror_write_failed", async () => {
+    const sourceId = await createSource(false);
+    const directory = await createCaseDirectory();
+    const filePath = await writeCaseFile(
+      directory,
+      "blocked.md",
+      "# Blocked\n\nblockedwrite token",
+    );
+    await mkdir(path.join(mirrorRoot, sourceId, "blocked.md"), {
+      recursive: true,
+    });
+
+    const job = await createService().submitDocument({ sourceId, filePath });
+
+    expect(job.status).toBe("FAILED");
+    expect(job.documentId).toBeNull();
+    expect(job.errorCode).toBe("mirror_write_failed");
+    expect(job.errorMessage).toContain("mirror write failed");
+    expect(await countDocuments(sourceId)).toBe(0);
   });
 
   it("rejects a title longer than the mirror path segment limit", async () => {

@@ -1,7 +1,8 @@
 export type AgentErrorCode =
   | "invalid_request"
   | "model_config_invalid"
-  | "model_failed";
+  | "model_failed"
+  | "rerank_failed";
 
 export class AgentError extends Error {
   readonly code: AgentErrorCode;

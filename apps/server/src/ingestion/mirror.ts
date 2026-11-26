@@ -56,7 +56,11 @@ export function validateMirrorPath(input: MirrorLocation): void {
 export async function writeMirrorFile(input: MirrorWriteInput): Promise<void> {
   const target = resolveMirrorPath(input);
   const directory = path.dirname(target);
-  await mkdir(directory, { recursive: true });
+  try {
+    await mkdir(directory, { recursive: true });
+  } catch (error) {
+    throw toMirrorWriteFailure(error);
+  }
   const temporary = path.join(
     directory,
     `.borges-${randomUUID().slice(0, 8)}.tmp`,
@@ -66,7 +70,7 @@ export async function writeMirrorFile(input: MirrorWriteInput): Promise<void> {
     await rename(temporary, target);
   } catch (error) {
     await rm(temporary, { force: true });
-    throw error;
+    throw toMirrorWriteFailure(error);
   }
 }
 
@@ -107,6 +111,15 @@ async function removeEmptyParents(
     }
     current = path.dirname(current);
   }
+}
+
+function toMirrorWriteFailure(error: unknown): IngestionFailure {
+  const reason =
+    error instanceof Error ? error.message.trim() : String(error).trim();
+  return new IngestionFailure(
+    "mirror_write_failed",
+    `mirror write failed: ${reason || "unknown filesystem error"}`,
+  );
 }
 
 function isNotFound(error: unknown): boolean {

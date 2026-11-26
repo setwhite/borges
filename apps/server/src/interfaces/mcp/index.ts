@@ -3,11 +3,10 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import type { AskRequest } from "../../agent/index.js";
 import type { SourceFilter } from "../../ingestion/index.js";
-import type { RetrievalMode, SearchRequest } from "../../retrieval/index.js";
+import type { RetrievalMode } from "../../retrieval/index.js";
 import type { InterfaceDependencies } from "../dependencies.js";
 import { toInterfaceError } from "../errors.js";
-
-const DEFAULT_TOP_K = 10;
+import { MAX_TOP_K, MIN_TOP_K, buildSearchRequest } from "../searchRequest.js";
 
 interface ListSourcesInput {
   tenantId?: string | undefined;
@@ -58,13 +57,13 @@ export function createMcpServer(deps: InterfaceDependencies): McpServer {
         query: z.string().min(1),
         sourceIds: z.array(z.string().min(1)).min(1),
         mode: z.enum(["hybrid", "hyperedge", "rg"]),
-        topK: z.number().int().min(1).max(100).optional(),
+        topK: z.number().int().min(MIN_TOP_K).max(MAX_TOP_K).optional(),
         tenantId: z.string().min(1).optional(),
         aclTags: z.array(z.string().min(1)).optional(),
       },
     },
     async (input: SearchToolInput) =>
-      await toolResult(() => deps.retrieval.search(searchRequest(input))),
+      await toolResult(() => deps.retrieval.search(buildSearchRequest(input))),
   );
 
   server.registerTool(
@@ -112,17 +111,6 @@ async function toolResult(
 
 function sourceFilter(input: ListSourcesInput): SourceFilter {
   return {
-    ...(input.tenantId === undefined ? {} : { tenantId: input.tenantId }),
-    ...(input.aclTags === undefined ? {} : { aclTags: input.aclTags }),
-  };
-}
-
-function searchRequest(input: SearchToolInput): SearchRequest {
-  return {
-    query: input.query,
-    sourceIds: input.sourceIds,
-    mode: input.mode,
-    topK: input.topK ?? DEFAULT_TOP_K,
     ...(input.tenantId === undefined ? {} : { tenantId: input.tenantId }),
     ...(input.aclTags === undefined ? {} : { aclTags: input.aclTags }),
   };

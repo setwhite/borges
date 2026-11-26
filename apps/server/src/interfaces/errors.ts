@@ -73,6 +73,7 @@ function agentStatus(code: AgentError["code"]): number {
     case "model_config_invalid":
       return 500;
     case "model_failed":
+    case "rerank_failed":
       return 502;
   }
 }

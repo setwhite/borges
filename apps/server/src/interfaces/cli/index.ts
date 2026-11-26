@@ -4,14 +4,20 @@ import type {
   SourceFilter,
   SubmitDocumentInput,
 } from "../../ingestion/index.js";
-import type { RetrievalMode, SearchRequest } from "../../retrieval/index.js";
+import type { RetrievalMode } from "../../retrieval/index.js";
 import type { InterfaceDependencies } from "../dependencies.js";
 import { toInterfaceError } from "../errors.js";
+import {
+  DEFAULT_TOP_K,
+  MAX_TOP_K,
+  MIN_TOP_K,
+  buildSearchRequest,
+  isValidTopK,
+} from "../searchRequest.js";
 import { renderAsk, renderHits, renderJob, renderSources } from "./text.js";
 
 const EXIT_DOMAIN_ERROR = 1;
 const EXIT_USAGE_ERROR = 2;
-const DEFAULT_TOP_K = 10;
 const RETRIEVAL_MODES: readonly RetrievalMode[] = ["hybrid", "hyperedge", "rg"];
 
 export type OutputFormat = "json" | "text";
@@ -178,8 +184,7 @@ function buildProgram(
       "json",
     )
     .action(async (options: SearchOptions) => {
-      const request = searchRequest(options);
-      const hits = await deps.retrieval.search(request);
+      const hits = await deps.retrieval.search(searchRequest(options));
       emit(write, options.format, hits, () => renderHits(hits));
     });
 
@@ -243,17 +248,16 @@ function submitDocumentInput(options: IngestOptions): SubmitDocumentInput {
   };
 }
 
-function searchRequest(options: SearchOptions): SearchRequest {
-  return {
+function searchRequest(options: SearchOptions) {
+  const aclTags = options.aclTag ?? [];
+  return buildSearchRequest({
     query: requireOption(options.query, "--query"),
     sourceIds: requireSourceIds(options.sourceId),
     mode: options.mode,
     topK: options.topK,
     ...(options.tenantId === undefined ? {} : { tenantId: options.tenantId }),
-    ...(options.aclTag === undefined || options.aclTag.length === 0
-      ? {}
-      : { aclTags: [...options.aclTag] }),
-  };
+    ...(aclTags.length === 0 ? {} : { aclTags }),
+  });
 }
 
 function askRequest(options: AskOptions): AskRequest {
@@ -303,8 +307,10 @@ function parseMode(value: string): RetrievalMode {
 
 function parseTopK(value: string): number {
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    throw new InvalidArgumentError("top-k must be a positive integer");
+  if (!isValidTopK(parsed)) {
+    throw new InvalidArgumentError(
+      `top-k must be an integer between ${MIN_TOP_K} and ${MAX_TOP_K}`,
+    );
   }
   return parsed;
 }

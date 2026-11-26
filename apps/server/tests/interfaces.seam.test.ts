@@ -200,6 +200,45 @@ describe("InterfaceSeam HTTP", () => {
     expect(response.json()).toEqual(askFixture);
   });
 
+  it("accepts topK up to 1000 and rejects anything above it", async () => {
+    const accepted = await app.inject({
+      method: "POST",
+      url: "/search",
+      payload: {
+        query: "revenue",
+        sourceIds: [SOURCE_ID],
+        mode: "hybrid",
+        topK: 1000,
+      },
+    });
+
+    expect(accepted.statusCode).toBe(200);
+    expect(calls.searches).toEqual([
+      {
+        query: "revenue",
+        sourceIds: [SOURCE_ID],
+        mode: "hybrid",
+        topK: 1000,
+      },
+    ]);
+
+    calls.searches.length = 0;
+    const rejected = await app.inject({
+      method: "POST",
+      url: "/search",
+      payload: {
+        query: "revenue",
+        sourceIds: [SOURCE_ID],
+        mode: "hybrid",
+        topK: 1001,
+      },
+    });
+
+    expect(rejected.statusCode).toBe(400);
+    expect(errorOf(rejected).code).toBe("invalid_request");
+    expect(calls.searches).toEqual([]);
+  });
+
   it("rejects an invalid search body with a structured 400", async () => {
     const response = await app.inject({
       method: "POST",
@@ -408,6 +447,27 @@ describe("InterfaceSeam CLI", () => {
     expect(output).toContain(hitFixture.content);
     expect(output).toContain("page 3");
     expect(output.trimStart().startsWith("{")).toBe(false);
+  });
+
+  it("rejects an out-of-range --top-k with invalid_request before calling retrieval", async () => {
+    const { code, output } = await runCli([
+      "search",
+      "--query",
+      "revenue",
+      "--source-id",
+      SOURCE_ID,
+      "--top-k",
+      "100000",
+    ]);
+
+    expect(code).not.toBe(0);
+    const envelope = JSON.parse(output) as {
+      ok?: boolean;
+      error?: { code?: string; message?: string };
+    };
+    expect(envelope.ok).toBe(false);
+    expect(envelope.error?.code).toBe("invalid_request");
+    expect(calls.searches).toEqual([]);
   });
 
   it("returns a non-zero exit code and a JSON error envelope for invalid arguments", async () => {

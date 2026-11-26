@@ -9,9 +9,10 @@ import type {
   SourceFilter,
   SubmitDocumentInput,
 } from "../../ingestion/index.js";
-import type { RetrievalMode, SearchRequest } from "../../retrieval/index.js";
+import type { RetrievalMode } from "../../retrieval/index.js";
 import type { InterfaceDependencies } from "../dependencies.js";
 import { toInterfaceError } from "../errors.js";
+import { MAX_TOP_K, MIN_TOP_K, buildSearchRequest } from "../searchRequest.js";
 
 export interface HttpAppOptions {
   deps: InterfaceDependencies;
@@ -55,7 +56,6 @@ interface AskBody {
   aclTags?: string[];
 }
 
-const DEFAULT_TOP_K = 10;
 const AJV_OPTIONS = {
   customOptions: { coerceTypes: false, removeAdditional: false },
 } as const;
@@ -102,7 +102,7 @@ const searchSchema = {
       minItems: 1,
     },
     mode: { type: "string", enum: ["hybrid", "hyperedge", "rg"] },
-    topK: { type: "integer", minimum: 1, maximum: 100 },
+    topK: { type: "integer", minimum: MIN_TOP_K, maximum: MAX_TOP_K },
     tenantId: { type: "string", minLength: 1 },
     aclTags: aclTagsSchema,
   },
@@ -213,7 +213,7 @@ export async function createHttpApp(
     "/search",
     { schema: { body: searchSchema } },
     async (request) =>
-      await options.deps.retrieval.search(searchRequest(request.body)),
+      await options.deps.retrieval.search(buildSearchRequest(request.body)),
   );
 
   app.post<{ Body: AskBody }>(
@@ -242,17 +242,6 @@ function submitDocumentInput(body: SubmitDocumentBody): SubmitDocumentInput {
     sourceId: body.sourceId,
     filePath: body.filePath,
     ...(body.title === undefined ? {} : { title: body.title }),
-    ...(body.tenantId === undefined ? {} : { tenantId: body.tenantId }),
-    ...(body.aclTags === undefined ? {} : { aclTags: body.aclTags }),
-  };
-}
-
-function searchRequest(body: SearchBody): SearchRequest {
-  return {
-    query: body.query,
-    sourceIds: body.sourceIds,
-    mode: body.mode,
-    topK: body.topK ?? DEFAULT_TOP_K,
     ...(body.tenantId === undefined ? {} : { tenantId: body.tenantId }),
     ...(body.aclTags === undefined ? {} : { aclTags: body.aclTags }),
   };
